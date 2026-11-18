@@ -3231,20 +3231,21 @@ class JMHJarBasedBenchmarkSuiteBase(JMHBenchmarkSuiteBase):
 
 def _add_opens_and_exports_from_manifest(jarfile, add_opens=True, add_exports=True):
     vm_args = []
-    lines = None
+    manifest = None
     if os.path.isfile(jarfile):
-        archive = zipfile.ZipFile(jarfile, "r")
-        if "META-INF/MANIFEST.MF" in archive.namelist():
-            manifest = archive.read("META-INF/MANIFEST.MF").decode('utf-8')
-            lines = manifest.splitlines()
+        with zipfile.ZipFile(jarfile, "r") as archive:
+            if "META-INF/MANIFEST.MF" in archive.namelist():
+                manifest = archive.read("META-INF/MANIFEST.MF")
     else:
         # may happen with exploded jar files
         path = os.path.join(jarfile, "META-INF", "MANIFEST.MF")
         mx.log(path)
         if os.path.exists(path):
-            with open(path) as f:
-                lines = f.readlines()
-    if lines:
+            with open(path, "rb") as f:
+                manifest = f.read()
+    if manifest:
+        # A continuation can even split a UTF-8 character in a jar written by the JDK.
+        lines = re.sub(rb"(?:\r\n|\n|\r) ", b"", manifest).decode("utf-8").splitlines()
         if add_opens:
             add_opens_entries = [line for line in lines if line.strip().startswith("Add-Opens:")]
             if len(add_opens_entries) > 1:

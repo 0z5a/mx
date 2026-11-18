@@ -1198,6 +1198,23 @@ def _accumulate_services(services):
 # Suffix added to a distributions archive path to create the staging directory for the archive
 _staging_dir_suffix = '.files'
 
+def _manifest_header(name, value):
+    """Fold a manifest attribute into UTF-8 lines of at most 72 bytes."""
+    line = name + ': '
+    size = len(line.encode('utf-8'))
+    lines = []
+    for char in value:
+        width = len(char.encode('utf-8'))
+        if size + width > 72:
+            lines.append(line)
+            line = ' '
+            size = 1
+        line += char
+        size += width
+    lines.append(line)
+    return '\n'.join(lines) + '\n'
+
+
 class _Archive(object):
     """
     The path to a distribution's archive and its staging directory as well as the metadata for
@@ -1247,16 +1264,15 @@ class _Archive(object):
         manifest_contents = None
         if manifest:
             version = manifest.pop('Manifest-Version', '1.0')
-            manifest_contents = 'Manifest-Version: ' + version + '\n'
-            for manifestKey, manifestValue in manifest.items():
-                manifest_contents = manifest_contents + manifestKey + ': ' + manifestValue + '\n'
+            manifest_contents = _manifest_header('Manifest-Version', version)
+            manifest_contents += ''.join(_manifest_header(k, v) for k, v in manifest.items())
 
         if self.exploded:
             # write manifest even if exploded other components may depend on it
             if manifest_contents:
                 metainf = os.path.join(self.path, 'META-INF')
                 os.makedirs(metainf, exist_ok=True)
-                with open(os.path.join(metainf, 'MANIFEST.MF'), 'w') as f:
+                with open(os.path.join(metainf, 'MANIFEST.MF'), 'w', encoding='utf-8') as f:
                     f.write(manifest_contents)
         else:
             with zipfile.ZipFile(self.path, 'w', compression=self.compression) as zf:
